@@ -16,8 +16,14 @@
 #include "controller_wup.h"
 #endif
 
+#ifdef TARGET_PS4
+#include "controller_ps4.h"
+#endif
+
 static struct ControllerAPI *controller_implementations[] = {
-    &controller_recorded_tas,
+#if defined(TARGET_PS4)
+    &controller_ps4,
+#else
 #if defined(_WIN32) || defined(_WIN64)
     &controller_xinput,
 #else
@@ -27,6 +33,8 @@ static struct ControllerAPI *controller_implementations[] = {
     &controller_wup,
 #endif
     &controller_keyboard,
+#endif
+    &controller_recorded_tas,
 };
 
 s32 osContInit(UNUSED OSMesgQueue *mq, u8 *controllerBits, UNUSED OSContStatus *status) {

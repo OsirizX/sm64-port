@@ -1,0 +1,3 @@
+[submodule "deps"]
+	path = deps
+	url = https://github.com/flatz/ps4_stub_lib_maker_v2.git

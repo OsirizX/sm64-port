@@ -19,6 +19,10 @@
 #include "SDL.h"
 #define GL_GLEXT_PROTOTYPES 1
 #include "SDL_opengl.h"
+#elif defined(TARGET_PS4)
+#include <stdio.h>
+#include <piglet.h>
+void abort();
 #else
 #include <SDL2/SDL.h>
 #define GL_GLEXT_PROTOTYPES 1
@@ -175,8 +179,12 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(uint32_t shad
     size_t num_floats = 4;
 
     // Vertex shader
+#if defined(TARGET_PS4)
+    append_line(vs_buf, &vs_len, "attribute vec4 aVtxPos;");
+#else
     append_line(vs_buf, &vs_len, "#version 110");
     append_line(vs_buf, &vs_len, "attribute vec4 aVtxPos;");
+#endif
     if (cc_features.used_textures[0] || cc_features.used_textures[1]) {
         append_line(vs_buf, &vs_len, "attribute vec2 aTexCoord;");
         append_line(vs_buf, &vs_len, "varying vec2 vTexCoord;");
@@ -206,8 +214,12 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(uint32_t shad
     append_line(vs_buf, &vs_len, "}");
 
     // Fragment shader
+#if defined(TARGET_PS4)
+    append_line(fs_buf, &fs_len, "precision mediump float;");
+#else
     append_line(fs_buf, &fs_len, "#version 110");
     //append_line(fs_buf, &fs_len, "precision mediump float;");
+#endif
     if (cc_features.used_textures[0] || cc_features.used_textures[1]) {
         append_line(fs_buf, &fs_len, "varying vec2 vTexCoord;");
     }

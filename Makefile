@@ -21,6 +21,8 @@ NON_MATCHING ?= 0
 TARGET_N64 ?= 0
 # Build for Emscripten/WebGL
 TARGET_WEB ?= 0
+# Build for PS4
+TARGET_PS4 ?= 1
 # Compiler to use (ido or gcc)
 COMPILER ?= ido
 
@@ -30,12 +32,14 @@ ifeq ($(TARGET_N64),0)
   NON_MATCHING := 1
   GRUCODE := f3dex2e
   TARGET_WINDOWS := 0
-  ifeq ($(TARGET_WEB),0)
-    ifeq ($(OS),Windows_NT)
-      TARGET_WINDOWS := 1
-    else
-      # TODO: Detect Mac OS X, BSD, etc. For now, assume Linux
-      TARGET_LINUX := 1
+  ifeq ($(TARGET_PS4),0)
+    ifeq ($(TARGET_WEB),0)
+      ifeq ($(OS),Windows_NT)
+        TARGET_WINDOWS := 1
+      else
+        # TODO: Detect Mac OS X, BSD, etc. For now, assume Linux
+        TARGET_LINUX := 1
+      endif
     endif
   endif
 
@@ -191,10 +195,14 @@ BUILD_DIR_BASE := build
 ifeq ($(TARGET_N64),1)
   BUILD_DIR := $(BUILD_DIR_BASE)/$(VERSION)
 else
+ifeq ($(TARGET_PS4),1)
+  BUILD_DIR := $(BUILD_DIR_BASE)/$(VERSION)_ps4
+else
 ifeq ($(TARGET_WEB),1)
   BUILD_DIR := $(BUILD_DIR_BASE)/$(VERSION)_web
 else
   BUILD_DIR := $(BUILD_DIR_BASE)/$(VERSION)_pc
+endif
 endif
 endif
 
@@ -225,6 +233,10 @@ ifeq ($(TARGET_N64),1)
 else
   SRC_DIRS := $(SRC_DIRS) src/pc src/pc/gfx src/pc/audio src/pc/controller
   ASM_DIRS :=
+endif
+ifeq ($(TARGET_PS4),1)
+  SRC_DIRS += ps4/memory
+  INCDIRS += -Ips4/memory
 endif
 BIN_DIRS := bin bin/$(VERSION)
 
@@ -422,23 +434,46 @@ endif
 export LANG := C
 
 else # TARGET_N64
+ifeq ($(TARGET_PS4),1)
+  PS4_APPNAME := sm64-ps4
+  PS4_AUTH_INFO := 000000000000000000000000001C004000FF000000000080000000000000000000000000000000000000008000400040000000000000008000000000000000080040FFFF000000F000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 
-AS := as
-ifneq ($(TARGET_WEB),1)
-  CC := gcc
-  CXX := g++
+  UNAME_S := $(shell uname -s)
+  ifeq ($(UNAME_S),Linux)
+    CC      := clang++
+    LD      := ld.lld
+    CDIR    := linux
+  endif
+  ifeq ($(UNAME_S),Darwin)
+    CC      := /usr/local/opt/llvm/bin/clang++
+    LD      := /usr/local/opt/llvm/bin/ld.lld
+    CDIR    := macos
+  endif
+
+  CPP       := cpp -P
+  OBJDUMP   := objdump
+  OBJCOPY   := objcopy
+  PYTHON    := python3
+
+  MAKE_FSELF := python2 $(OO_PS4_TOOLCHAIN)/scripts/make_fself.py
 else
-  CC := emcc
+  AS := as
+  ifneq ($(TARGET_WEB),1)
+    CC := gcc
+    CXX := g++
+  else
+    CC := emcc
+  endif
+  ifeq ($(TARGET_WINDOWS),1)
+    LD := $(CXX)
+  else
+    LD := $(CC)
+  endif
+  CPP := cpp -P
+  OBJDUMP := objdump
+  OBJCOPY := objcopy
+  PYTHON := python3
 endif
-ifeq ($(TARGET_WINDOWS),1)
-  LD := $(CXX)
-else
-  LD := $(CC)
-endif
-CPP := cpp -P
-OBJDUMP := objdump
-OBJCOPY := objcopy
-PYTHON := python3
 
 # Platform-specific compiler and linker flags
 ifeq ($(TARGET_WINDOWS),1)
@@ -452,6 +487,19 @@ endif
 ifeq ($(TARGET_WEB),1)
   PLATFORM_CFLAGS  := -DTARGET_WEB
   PLATFORM_LDFLAGS := -lm -no-pie -s TOTAL_MEMORY=20MB -g4 --source-map-base http://localhost:8080/ -s "EXTRA_EXPORTED_RUNTIME_METHODS=['callMain']"
+endif
+ifeq ($(TARGET_PS4),1)
+  DEFINES += -DTARGET_PS4 -DORBIS -D_BSD_SOURCE -DNDEBUG
+  LIBDIRS += -L$(OO_PS4_TOOLCHAIN)/lib
+  INCDIRS += -I$(OO_PS4_TOOLCHAIN)/include -I$(OO_PS4_TOOLCHAIN)/include/orbis/_types -Ideps/include
+
+  PS4_CFLAGS := -cc1 -x c -triple x86_64-scei-ps4-elf -munwind-tables -std=c11 -ffreestanding -nostdinc++ -nobuiltininc -fno-builtin -nostdsysteminc -stack-protector 0 -Werror-implicit-function-declaration -Wfatal-errors $(INCDIRS) $(DEFINES) -pthread -fuse-init-array -emit-obj
+  PS4_CXXFLAGS := -cc1 -x c++ -triple x86_64-scei-ps4-elf -munwind-tables -std=c++11 -fcxx-exceptions -ffreestanding -nostdinc++ -nobuiltininc -fno-builtin -nostdsysteminc -stack-protector 0 -Werror-implicit-function-declaration -Wfatal-errors $(INCDIRS) $(DEFINES) -pthread -fuse-init-array -emit-obj
+  PS4_LDFLAGS := -m elf_x86_64 -pie --script $(OO_PS4_TOOLCHAIN)/link.x --eh-frame-hdr ps4/crt1.o
+  PS4_LIBS += -lkernel -lSceLibcInternal -lScePosix -lSceSysmodule -lSceSystemService -lSceUserService -lSceAudioOut -lScePad -lScePigletv2VSH
+
+  PLATFORM_CFLAGS := $(PS4_CFLAGS) $(OPT_FLAGS) $(INCLUDE_CFLAGS) $(VERSION_CFLAGS) $(GRUCODE_CFLAGS)
+  PLATFORM_LDFLAGS := $(PS4_LDFLAGS) $(LIBDIRS) $(PS4_LIBS)
 endif
 
 PLATFORM_CFLAGS += -DNO_SEGMENTED_MEMORY
@@ -484,8 +532,13 @@ endif
 
 GFX_CFLAGS += -DWIDESCREEN
 
-CC_CHECK := $(CC) -fsyntax-only -fsigned-char $(INCLUDE_CFLAGS) -Wall -Wextra -Wno-format-security -D_LANGUAGE_C $(VERSION_CFLAGS) $(MATCH_CFLAGS) $(PLATFORM_CFLAGS) $(GFX_CFLAGS) $(GRUCODE_CFLAGS)
-CFLAGS := $(OPT_FLAGS) $(INCLUDE_CFLAGS) -D_LANGUAGE_C $(VERSION_CFLAGS) $(MATCH_CFLAGS) $(PLATFORM_CFLAGS) $(GFX_CFLAGS) $(GRUCODE_CFLAGS) -fno-strict-aliasing -fwrapv -march=native
+ifeq ($(TARGET_PS4),1)
+  CC_CHECK := $(CC) $(PLATFORM_CFLAGS) -fsyntax-only $(INCLUDE_CFLAGS) -Wall -Wextra -Wno-format-security -D_LANGUAGE_C $(VERSION_CFLAGS) $(MATCH_CFLAGS) $(GFX_CFLAGS) $(GRUCODE_CFLAGS)
+  CFLAGS := $(PLATFORM_CFLAGS) $(OPT_FLAGS) $(INCLUDE_CFLAGS) -D_LANGUAGE_C $(VERSION_CFLAGS) $(MATCH_CFLAGS) $(GFX_CFLAGS) $(GRUCODE_CFLAGS)
+else
+  CC_CHECK := $(CC) -fsyntax-only -fsigned-char $(INCLUDE_CFLAGS) -Wall -Wextra -Wno-format-security -D_LANGUAGE_C $(VERSION_CFLAGS) $(MATCH_CFLAGS) $(PLATFORM_CFLAGS) $(GFX_CFLAGS) $(GRUCODE_CFLAGS)
+  CFLAGS := $(OPT_FLAGS) $(INCLUDE_CFLAGS) -D_LANGUAGE_C $(VERSION_CFLAGS) $(MATCH_CFLAGS) $(PLATFORM_CFLAGS) $(GFX_CFLAGS) $(GRUCODE_CFLAGS) -fno-strict-aliasing -fwrapv -march=native
+endif
 
 ASFLAGS := -I include -I $(BUILD_DIR) $(VERSION_ASFLAGS)
 
@@ -671,12 +724,21 @@ $(BUILD_DIR)/%.aifc: $(BUILD_DIR)/%.table %.aiff
 $(BUILD_DIR)/rsp/%.bin $(BUILD_DIR)/rsp/%_data.bin: rsp/%.s
 	$(RSPASM) -sym $@.sym -definelabel $(VERSION_DEF) 1 -definelabel $(GRUCODE_DEF) 1 -strequ CODE_FILE $(BUILD_DIR)/rsp/$*.bin -strequ DATA_FILE $(BUILD_DIR)/rsp/$*_data.bin $<
 
+ifeq ($(TARGET_PS4),1)
+$(ENDIAN_BITWIDTH): tools/determine-endian-bitwidth.c
+	$(CC) $(CFLAGS) -o $@.dummy2 $< 2>$@.dummy1; true
+	grep -o 'msgbegin --endian .* --bitwidth .* msgend' $@.dummy1 > $@.dummy2
+	head -n1 <$@.dummy2 | cut -d' ' -f2-5 > $@
+	@rm $@.dummy1
+	@rm $@.dummy2
+else
 $(ENDIAN_BITWIDTH): tools/determine-endian-bitwidth.c
 	$(CC) -c $(CFLAGS) -o $@.dummy2 $< 2>$@.dummy1; true
 	grep -o 'msgbegin --endian .* --bitwidth .* msgend' $@.dummy1 > $@.dummy2
 	head -n1 <$@.dummy2 | cut -d' ' -f2-5 > $@
 	@rm $@.dummy1
 	@rm $@.dummy2
+endif
 
 $(SOUND_BIN_DIR)/sound_data.ctl: sound/sound_banks/ $(SOUND_BANK_FILES) $(SOUND_SAMPLE_AIFCS) $(ENDIAN_BITWIDTH)
 	$(PYTHON) tools/assemble_sound.py $(BUILD_DIR)/sound/samples/ sound/sound_banks/ $(SOUND_BIN_DIR)/sound_data.ctl $(SOUND_BIN_DIR)/sound_data.tbl $(VERSION_CFLAGS) $$(cat $(ENDIAN_BITWIDTH))
@@ -778,6 +840,17 @@ $(GLOBAL_ASM_DEP).$(NON_MATCHING):
 	@rm -f $(GLOBAL_ASM_DEP).*
 	touch $@
 
+ifeq ($(TARGET_PS4),1)
+$(BUILD_DIR)/%.o: %.cpp
+	$(CXX) $(CFLAGS) -o $@ $<
+
+$(BUILD_DIR)/%.o: %.c
+	$(CC) $(CFLAGS) -o $@ $<
+
+
+$(BUILD_DIR)/%.o: $(BUILD_DIR)/%.c
+	$(CC) $(CFLAGS) -o $@ $<
+else
 $(BUILD_DIR)/%.o: %.cpp
 	@$(CXX) -fsyntax-only $(CFLAGS) -MMD -MP -MT $@ -MF $(BUILD_DIR)/$*.d $<
 	$(CXX) -c $(CFLAGS) -o $@ $<
@@ -790,6 +863,7 @@ $(BUILD_DIR)/%.o: %.c
 $(BUILD_DIR)/%.o: $(BUILD_DIR)/%.c
 	@$(CC_CHECK) $(CC_CHECK_CFLAGS) -MMD -MP -MT $@ -MF $(BUILD_DIR)/$*.d $<
 	$(CC) -c $(CFLAGS) -o $@ $<
+endif
 
 $(BUILD_DIR)/%.o: %.s
 	$(AS) $(ASFLAGS) -MD $(BUILD_DIR)/$*.d -o $@ $<
@@ -819,6 +893,17 @@ else
 $(EXE): $(O_FILES) $(MIO0_FILES:.mio0=.o) $(SOUND_OBJ_FILES) $(ULTRA_O_FILES) $(GODDARD_O_FILES)
 	$(LD) -L $(BUILD_DIR) -o $@ $(O_FILES) $(SOUND_OBJ_FILES) $(ULTRA_O_FILES) $(GODDARD_O_FILES) $(LDFLAGS)
 endif
+
+oelf: all
+	$(OO_PS4_TOOLCHAIN)/bin/$(CDIR)/create-eboot -in=$(BUILD_DIR)/$(TARGET) -out=$(BUILD_DIR)/$(TARGET).oelf --paid 0x3800000000000011
+
+fself: oelf
+	$(MAKE_FSELF) --auth-info $(PS4_AUTH_INFO) $(BUILD_DIR)/$(TARGET).oelf $(BUILD_DIR)/$(TARGET).self
+
+pkg: fself
+	cp $(BUILD_DIR)/$(TARGET).self $(BUILD_DIR)/../$(PS4_APPNAME).self
+	$(OO_PS4_TOOLCHAIN)/bin/$(CDIR)/PkgTool.Core sfo_listentries ps4/sce_sys/param.sfo
+	$(OO_PS4_TOOLCHAIN)/bin/$(CDIR)/PkgTool.Core pkg_build ps4/$(PS4_APPNAME).gp4 $(BUILD_DIR)/../
 
 
 

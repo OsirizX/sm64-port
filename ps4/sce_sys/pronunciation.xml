@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<gamePackage>
+  <language id="01" modified="0">
+    <speechRecognitionWords>
+      <text display="1">Super Mario Sixty Four</text>
+      <pronunciation>s uw p er ___ m aa r iy ow ___ s ih k s t iy ___ f ao r</pronunciation>
+    </speechRecognitionWords>
+    <speechRecognitionWords>
+      <text display="1">Super Mario Sixty Four</text>
+      <pronunciation>s uw p ax r ___ m ae ax r ih ow ___ s ih k s t ih ___ f ao r</pronunciation>
+    </speechRecognitionWords>
+  </language>
+</gamePackage>

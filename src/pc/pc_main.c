@@ -12,6 +12,7 @@
 
 #include "gfx/gfx_pc.h"
 #include "gfx/gfx_opengl.h"
+#include "gfx/gfx_ps4.h"
 #include "gfx/gfx_direct3d11.h"
 #include "gfx/gfx_direct3d12.h"
 #include "gfx/gfx_dxgi.h"
@@ -23,6 +24,7 @@
 #include "audio/audio_pulse.h"
 #include "audio/audio_alsa.h"
 #include "audio/audio_sdl.h"
+#include "audio/audio_ps4.h"
 #include "audio/audio_null.h"
 
 #include "controller/controller_keyboard.h"
@@ -32,6 +34,17 @@
 #include "compat.h"
 
 #define CONFIG_FILE "sm64config.txt"
+
+#if defined(TARGET_PS4)
+#include <stdio.h>
+#include <string.h>
+#include <limits.h>
+#include <orbis/libkernel.h>
+#include <orbis/SystemService.h>
+#include <orbis/UserService.h>
+#define MODULE_PATH "/data/self/system/common/lib/"
+#define ORBIS_KERNEL_PRIO_FIFO_DEFAULT 700
+#endif
 
 OSMesg D_80339BEC;
 OSMesgQueue gSIEventMesgQueue;
@@ -160,7 +173,9 @@ void main_func(void) {
     wm_api = &gfx_dxgi_api;
 #elif defined(ENABLE_OPENGL)
     rendering_api = &gfx_opengl_api;
-    #if defined(__linux__) || defined(__BSD__)
+    #if defined(TARGET_PS4)
+        wm_api = &gfx_ps4;
+    #elif defined(__linux__) || defined(__BSD__)
         wm_api = &gfx_glx;
     #else
         wm_api = &gfx_sdl;
@@ -192,6 +207,11 @@ void main_func(void) {
         audio_api = &audio_sdl;
     }
 #endif
+#ifdef TARGET_PS4
+    if (audio_api == NULL && audio_ps4.init()) {
+        audio_api = &audio_ps4;
+    }
+#endif
     if (audio_api == NULL) {
         audio_api = &audio_null;
     }
@@ -216,6 +236,59 @@ void main_func(void) {
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
 int WINAPI WinMain(UNUSED HINSTANCE hInstance, UNUSED HINSTANCE hPrevInstance, UNUSED LPSTR pCmdLine, UNUSED int nCmdShow) {
+    main_func();
+    return 0;
+}
+#elif defined(TARGET_PS4)
+int main(UNUSED int argc, UNUSED char *argv[]) {
+
+    int ret;
+    OrbisKernelModule s_piglet_module;
+    OrbisKernelModule s_shacc_module;
+    char *modules[] = {
+     "libSceSysCore",
+     "libSceMbus",
+     "libSceIpmi",
+     "libSceSystemService",
+     "libSceUserService",
+     "libSceAudioOut",
+     "libScePad",
+    };
+
+    char file_path[PATH_MAX];
+    char module_path[PATH_MAX];
+    int len = sizeof(modules) / sizeof(modules[0]);
+    const char *sandbox_word = sceKernelGetFsSandboxRandomWord();
+    if (sandbox_word)
+      snprintf(module_path, sizeof(module_path), "/%s/common/lib", sandbox_word);
+    else
+      snprintf(module_path, sizeof(module_path), "/%s/common/lib", "system");
+
+    for (int i = 0; i < len; i++)
+    {
+       snprintf(file_path, sizeof(file_path), "%s/%s.sprx", module_path, modules[i]);
+       sceKernelLoadStartModule(file_path, 0, NULL, 0, NULL, &ret);
+    }
+
+    s_piglet_module = sceKernelLoadStartModule(MODULE_PATH "libScePigletv2VSH.sprx", 0, NULL, 0, NULL, &ret);
+    if(s_piglet_module < 0)
+    {
+      return -1;
+    }
+
+    s_shacc_module = sceKernelLoadStartModule(MODULE_PATH "libSceShaccVSH.sprx", 0, NULL, 0, NULL, &ret);
+    if(s_shacc_module < 0)
+    {
+      return -1;
+    }
+
+    sceSystemServiceHideSplashScreen();
+
+    OrbisUserServiceInitializeParams param;
+    memset(&param, 0, sizeof(param));
+    param.priority = ORBIS_KERNEL_PRIO_FIFO_DEFAULT;
+    sceUserServiceInitialize(&param);
+
     main_func();
     return 0;
 }
