@@ -15,7 +15,7 @@ A prior copy of the game is required to extract the assets.
 
   Once extracted, transfer the modules to your PS4 in the location below. Create the subdirs if they are not there.
 
-  `/data/self/system/common/lib/libScePigletVSH.sprx`
+  `/data/self/system/common/lib/libScePigletv2VSH.sprx`
 
   `/data/self/system/common/lib/libSceShaccVSH.sprx`
 
@@ -35,7 +35,13 @@ A prior copy of the game is required to extract the assets.
 
 4. Run `make TARGET_PS4=1 pkg` to build the game. Add `-j4` to improve build time.
 
-5. The installable pkg will be located at `build/UP0001-CUSA64001_00-0000000000000001.pkg`
+5. The installable pkg will be located at:
+
+  `build/UP0001-CUSA64001_00-0000000000000001.pkg` for **us** build
+
+  `build/EP0001-CUSA64002_00-0000000000000001.pkg` for **eu** build
+
+  `build/JP0001-CUSA64003_00-0000000000000001.pkg` for **jp** build
 
 ## Note
 Savedata is stored at `/data/sm64_save_file.bin`.

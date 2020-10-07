@@ -901,6 +901,8 @@ fself: oelf
 	$(MAKE_FSELF) --auth-info $(PS4_AUTH_INFO) $(BUILD_DIR)/$(TARGET).oelf $(BUILD_DIR)/$(TARGET).self
 
 pkg: fself
+	cp ps4/$(VERSION)/param.sfo ps4/sce_sys/param.sfo
+	cp ps4/$(VERSION)/$(PS4_APPNAME).gp4 ps4/$(PS4_APPNAME).gp4
 	cp $(BUILD_DIR)/$(TARGET).self $(BUILD_DIR)/../$(PS4_APPNAME).self
 	$(OO_PS4_TOOLCHAIN)/bin/$(CDIR)/PkgTool.Core sfo_listentries ps4/sce_sys/param.sfo
 	$(OO_PS4_TOOLCHAIN)/bin/$(CDIR)/PkgTool.Core pkg_build ps4/$(PS4_APPNAME).gp4 $(BUILD_DIR)/../
