@@ -21,8 +21,6 @@
     <file targ_path="sce_sys/icon0.png" orig_path="sce_sys/icon0.png"/>
     <file targ_path="sce_sys/pic0.png" orig_path="sce_sys/pic0.png"/>
     <file targ_path="sce_sys/pic1.png" orig_path="sce_sys/pic1.png"/>
-    <file targ_path="sce_module/libScePigletv2VSH.sprx" orig_path="sce_module/libScePigletv2VSH.sprx"/>
-    <file targ_path="sce_module/libSceShaccVSH.sprx" orig_path="sce_module/libSceShaccVSH.sprx"/>
     <file targ_path="eboot.bin" orig_path="../build/sm64-ps4.self"/>
 	</files>
 	<rootdir>
